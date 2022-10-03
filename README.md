@@ -1,3 +1,0 @@
-# Citibike Availability Dashboard
-
-###
