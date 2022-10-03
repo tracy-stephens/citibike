@@ -1,6 +1,7 @@
 import pandas as pd
 from datetime import datetime
 import os
+import glob
 import json
 import urllib.request
 import requests
@@ -187,11 +188,11 @@ class RealTimeData:
         self, 
         url=GBFS_URL, 
         data_dir=SNAPSHOTS_DIR,
-        source='local'
+        snapshot=None
     ):
         self.url = url
         self.data_dir = data_dir
-        self.source = source 
+        self.snapshot = snapshot
         
         self.language = 'en'
         
@@ -201,6 +202,8 @@ class RealTimeData:
 
         self._url_map = None
         self._feeds = None
+        self._snapshot_path = None
+        self._datasets = None
         
     def update(self):
         res = read_json(self.url)
@@ -223,32 +226,72 @@ class RealTimeData:
             self.update()
         return self._feeds
     
-    def save(self, dir=None):
-        if dir is None:
-            dir_ = self.data_dir
-        else:
-            dir_ = dir
+    @property
+    def snapshot_path(self):
+        if self._snapshot_path is None:
+            if self.snapshot is None:
+                self.save()
+            else:
+                self._snapshot_path = os.path.join(
+                    self.data_dir, str(self.snapshot)
+                )
+                if not os.path.exists(self._snapshot_path):
+                    raise FileNotFoundError(f"No snapshot at {str(self.snapshot)}")
+        return self._snapshot_path
+    
+    def save(self):
+        dir_ = self.data_dir
+        if self.snapshot is not None:
+            self.snapshot = None
+        snapshot = datetime.now().timestamp()
+        self.snapshot = snapshot
+        print(f"New snapshot at {str(snapshot)}.")
 
-        snapshot_time = datetime.now().timestamp()
-        save_dir = os.path.join(dir_, str(snapshot_time))
+        save_dir = os.path.join(dir_, str(SNAPSHOTS_DIR))
+        self.snapshot_path = save_dir
+
         if not os.path.exists(save_dir):
             os.mkdir(save_dir)
+        
         for name, url in self.feeds.items():
             data = read_json(url)
             write_json(data, os.path.join(save_dir, name+".json"))
         self.saved = True
+    
+    @property
+    def datasets(self):
+        if self._datasets is None:
+            datasets = {
+                'system_information': SystemInformation,
+                #'station_information': StationInformation,
+                #'station_status': StationStatus,
+            }
+            res = {}
+            for name, class_name in datasets.items():
+                res[name] = class_name(
+                    url=self.url, 
+                    snapshot=self.snapshot, 
+                    data_dir=self.data_dir
+                )
+            self._datasets = res
+        return self._datasets
 
 
 class SystemInformation(RealTimeData):
-    def __init__(self, url=GBFS_URL):
+    def __init__(self, url=GBFS_URL, **kwargs):
 
         self._data = None
-        super().__init__(url=url)
+        super().__init__(url=url, **kwargs)
     
     def update(self):
-        super().update()
-        url = self._feeds['system_information']
-        res = read_json(url)
+        if self.snapshot is not None:
+            file_name = os.path.join(self.snapshot_path, 'system_information.json')
+            with open(file_name) as f:
+                res = json.load(f)
+        else:
+            super().update()
+            url = self._feeds['system_information']
+            res = read_json(url)
         self._data = res
         self.last_update_time = res['last_updated']
         self.ttl = res['ttl']
