@@ -249,7 +249,7 @@ class RealTimeData:
 
         save_dir = os.path.join(dir_, str(SNAPSHOTS_DIR))
         self.snapshot_path = save_dir
-
+  
         if not os.path.exists(save_dir):
             os.mkdir(save_dir)
         
@@ -263,8 +263,8 @@ class RealTimeData:
         if self._datasets is None:
             datasets = {
                 'system_information': SystemInformation,
-                #'station_information': StationInformation,
-                #'station_status': StationStatus,
+                'station_information': StationInformation,
+                'station_status': StationStatus,
             }
             res = {}
             for name, class_name in datasets.items():
@@ -304,16 +304,21 @@ class SystemInformation(RealTimeData):
     
 
 class StationInformation(RealTimeData):
-    def __init__(self, url=GBFS_URL):
+    def __init__(self, url=GBFS_URL, **kwargs):
         
         self._data = None
         self._stations = None
-        super().__init__(url=url)
+        super().__init__(url=url, **kwargs)
     
     def update(self):
-        super().update()
-        url = self._feeds['station_information']
-        res = read_json(url)
+        if self.snapshot is not None:
+            file_name = os.path.join(self.snapshot_path, 'station_information.json')
+            with open(file_name) as f:
+                res = json.load(f)
+        else:
+            super().update()
+            url = self._feeds['station_information']
+            res = read_json(url)
         self._data = res
         self._stations = res['data']['stations']
         self.last_update_time = res['last_updated']
@@ -333,16 +338,21 @@ class StationInformation(RealTimeData):
 
 
 class StationStatus(RealTimeData):
-    def __init__(self, url=GBFS_URL):
+    def __init__(self, url=GBFS_URL, **kwargs):
         
         self._data = None
         self._stations = None
-        super().__init__(url=url)
+        super().__init__(url=url, **kwargs)
     
     def update(self):
-        super().update()
-        url = self._feeds['station_status']
-        res = read_json(url)
+        if self.snapshot is not None:
+            file_name = os.path.join(self.snapshot_path, 'station_status.json')
+            with open(file_name) as f:
+                res = json.load(f)
+        else:
+            super().update()
+            url = self._feeds['station_status']
+            res = read_json(url)
         self._data = res
         self._stations = res['data']['stations']
         self.last_update_time = res['last_updated']
