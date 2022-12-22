@@ -1,5 +1,4 @@
 import pandas as pd
-from historical import TripData
 from realtime import StationInformation, StationStatus
 
 

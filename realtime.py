@@ -4,7 +4,7 @@ import json
 import urllib.request
 
 
-SNAPSHOTS_DIR = os.path.join(os.getcwd(), "snapshots")
+SNAPSHOTS_DIR = os.path.join(os.getcwd(), "data", "snapshots")
 GBFS_URL = "http://gbfs.citibikenyc.com/gbfs/gbfs.json"
 
 
@@ -16,6 +16,11 @@ def read_json(url):
 def write_json(dict_, file_name):
     with open(file_name, "w") as outfile:
         json.dump(dict_, outfile)
+
+
+def latest_snapshot(dir=SNAPSHOTS_DIR):
+    snapshots = next(os.walk(dir))[1]
+    return max([float(i) for i in snapshots if i.replace('.', '').isdigit()])
 
 
 class RealTimeData:
@@ -74,6 +79,10 @@ class RealTimeData:
                     raise FileNotFoundError(f"No snapshot at {str(self.snapshot)}")
         return self._snapshot_path
     
+    @snapshot_path.setter
+    def snapshot_path(self, value):
+        self._snapshot_path = value
+    
     def save(self):
         dir_ = self.data_dir
         if self.snapshot is not None:
@@ -82,7 +91,8 @@ class RealTimeData:
         self.snapshot = snapshot
         print(f"New snapshot at {str(snapshot)}.")
 
-        save_dir = os.path.join(dir_, str(SNAPSHOTS_DIR))
+        save_dir = os.path.join(dir_, str(snapshot))
+        self.save_dir = save_dir
         self.snapshot_path = save_dir
   
         if not os.path.exists(save_dir):
@@ -109,6 +119,7 @@ class RealTimeData:
                     data_dir=self.data_dir
                 )
             self._datasets = res
+            datasets['station_status']._id_name_lookup = datasets['station_information'].id_name_lookup
         return self._datasets
 
 
@@ -143,6 +154,7 @@ class StationInformation(RealTimeData):
         
         self._data = None
         self._stations = None
+        self._id_name_lookup = None
         super().__init__(url=url, **kwargs)
     
     def update(self):
@@ -170,13 +182,26 @@ class StationInformation(RealTimeData):
         if self._stations is None:
             self.update()
         return self._stations
+    
+    def capacity(self):
+        stations = self.stations
+        return {i['name']: i['capacity'] for i in stations}
+    
+    @property
+    def id_name_lookup(self):
+        if self._id_name_lookup is None:
+            stations = self.stations
+            self._id_name_lookup = {i['station_id']: i['name'] for i in stations}
+        return self._id_name_lookup
 
 
 class StationStatus(RealTimeData):
-    def __init__(self, url=GBFS_URL, **kwargs):
+    def __init__(self, station_name_map=None, url=GBFS_URL, **kwargs):
+        self.station_name_map = station_name_map
         
         self._data = None
         self._stations = None
+        self._id_name_lookup = None
         super().__init__(url=url, **kwargs)
     
     def update(self):
@@ -204,3 +229,10 @@ class StationStatus(RealTimeData):
         if self._stations is None:
             self.update()
         return self._stations
+    
+    @property
+    def id_name_lookup(self):
+        if self._id_name_lookup is None:
+            si = StationInformation(snapshot=self.snapshot, url=self.url, data_dir=self.data_dir)
+            self._id_name_lookup = si.id_name_lookup
+        return self._id_name_lookup
