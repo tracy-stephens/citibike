@@ -9,11 +9,12 @@ def time_buckets(df, key, freq='1min', offset=0, label='left'):
 
 
 class Station:
-    def __init__(self, trip_data : TripData, name : str):
+    def __init__(self, trip_data, name: str, snapshot=None):
         
         self.trip_data = trip_data
         self.name = name
         self.id = None
+        self.snapshot = snapshot
         
         self._departures = None
         self._arrivals = None
@@ -44,15 +45,23 @@ class Station:
     @property
     def info(self):
         if self._info is None:
-            all_stations = StationInformation().stations
-            self._info = [i for i in all_stations if i['name'] == self.name][0]
-            self.id = self._info['station_id']
+            all_stations = StationInformation(snapshot=self.snapshot).stations
+            try:
+                self._info = [
+                    i for i in all_stations if i['name'].replace('\t', 't') == self.name.replace('\\','')
+                ][0]
+                self.id = self._info['station_id']
+            except IndexError:
+                print(f'No station info found for {self.name}')
+                return 
         return self._info
     
     @property
     def status(self):
+        if self.id is None:
+            self.id = self.info['station_id']
         if self._status is None:
-            all_stations = StationStatus().stations
+            all_stations = StationStatus(snapshot=self.snapshot).stations
             self._status = [i for i in all_stations if i['station_id'] == self.id][0]
         return self._status
             

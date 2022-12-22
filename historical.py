@@ -9,7 +9,7 @@ import io
 from citibike import Station
 
 
-TRIP_DATA_DIR = os.path.join(os.getcwd(), "trip_data", "raw")
+TRIP_DATA_DIR = os.path.join(os.getcwd(), "data", "trip_data")
 TRIPDATA_URL = "https://s3.amazonaws.com/tripdata"
 
     
@@ -21,12 +21,19 @@ def read_zip_file(url):
     
 
 class TripData:
-    def __init__(self, month: str, data_dir=TRIP_DATA_DIR, trip_data_url=TRIPDATA_URL):
+    def __init__(
+        self, 
+        month: str, 
+        data_dir=TRIP_DATA_DIR, 
+        trip_data_url=TRIPDATA_URL,
+        snapshot=None
+    ):
         self.file_name = f"{str(month)}-citibike-tripdata.csv"
         self.file_path = os.path.join(data_dir, self.file_name)
         self.start = datetime(int(month[:4]), int(month[4:]), 1)
         self.end = self.start + pd.offsets.DateOffset(months=1)
         self.trip_data_url = trip_data_url
+        self.snapshot = snapshot
         
         self._data = None
         self._station_names = None
@@ -55,11 +62,11 @@ class TripData:
     def get_data(self, download=True):
         
         try:
-            data = pd.read_csv(self.file_path)
+            data = pd.read_csv(self.file_path, low_memory=False)
         except FileNotFoundError:
             if download:
                 self.download(save=True)
-                data = pd.read_csv(self.file_path)
+                data = pd.read_csv(self.file_path, low_memory=False)
             else:
                 raise(FileNotFoundError)
                 
@@ -89,8 +96,17 @@ class TripData:
     @property
     def stations(self):
         if self._stations is None:
-            self._stations = [Station(trip_data=self, name=k) for k in self.station_names]
+            self._stations = [
+                Station(
+                    trip_data=self, name=k, snapshot=self.snapshot
+                ) for k in self.station_names
+            ]
         return self._stations
+
+    def find_station(self, station_name):
+        stations = self.stations
+        res = [i for i in stations if i.name == station_name][0]
+        return res
     
     def time_range(self, freq='1min'):
         return pd.date_range(self.start, self.end, freq=freq)[:-1]
